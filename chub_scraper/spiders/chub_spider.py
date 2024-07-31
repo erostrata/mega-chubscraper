@@ -54,9 +54,22 @@ def fetch_character_data(url):
         try:
             data = response.json()
 
-            personality = data['node']['definition']['personality'].replace('\r', '').replace('\n', '')
-            description = data['node']['definition']['description'].replace('\r', '').replace('\n', '')
-            first_message = data['node']['definition']['first_message'].replace('\r', '').replace('\n', '').replace('*', '')
+            name = data['node']['name']
+            char_title = data['node']['definition']['project_name']
+            personality_raw = data['node']['definition']['personality']
+            first_message_raw = data['node']['definition']['first_message']
+            author = data['node']['fullPath']
+            description = data['node']['tagline']
+            pfp = data['node']['avatar_url']
+
+            def clean_data(d):
+                clean = re.sub(r'https?://\S+|!\[.*?\]\(.*?\)', '', d)
+                clean = clean.replace('\r', '').replace('\n', '').replace('{{user}}', 'user').replace('\u2019', "'").replace('\u2026', '...').replace('\u2014', '-').replace('{{char}}', char_title).replace('\\"', '"')
+                return clean
+            
+            personality = clean_data(personality_raw)
+            first_message = clean_data(first_message_raw).replace('*', '').replace('{{user}}', 'you')
+            author_clean = re.sub(r'/.*', '', author)
 
             prompt = {
                 "type": "duo-image",
@@ -69,7 +82,17 @@ def fetch_character_data(url):
                 "temperature": 0.7
             }
 
-            print(json.dumps(prompt, indent=2))
+            json_output = json.dumps(prompt, indent=2)
+
+            return {
+                'name' : name,
+                'pfp' : pfp,
+                'author': author_clean,
+                'description': description,
+                'json_output': json_output
+            }
+
+
         except json.JSONDecodeError:
             print("Failed to decode JSON response.")
     else:
@@ -96,15 +119,24 @@ def main():
         characters_data = fetch_character_list(page_number)
         if characters_data and 'data' in characters_data and 'nodes' in characters_data['data']:
             character_urls = [construct_character_url(character['fullPath']) for character in characters_data['data']['nodes']]
-            if character_urls: 
+            if character_urls:
                 for x in character_urls:
                     char = construct_api_url(x)
                     data = fetch_character_data(char)
-                    print(data)
+                    if data:
+                        formatted_response = f"Name: {data['name']}\n\nPfp URL: {data['pfp']}\n\nAuthor: {data['author']}\n\nDescription: {data['description']}\n\nJSON:\n{data['json_output']}"
+                        print(formatted_response)
+                    else:
+                        print("Failed to fetch character data for URL:", x)
+            else:
+                print("No character URLs found.")
         else:
             logging.error("No valid character data found.")
     else:
         logging.error("No page number found in the URL.")
+
+if __name__ == "__main__":
+    main()
 
 
 if __name__ == "__main__":
