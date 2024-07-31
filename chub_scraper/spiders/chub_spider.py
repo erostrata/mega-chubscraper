@@ -5,7 +5,6 @@ import re
 import urllib.parse
 import random
 
-
 def fetch_character_list(page_number):
     api_url = f'https://api.chub.ai/search?first=24&special_mode=trending&include_forks=true&excludetopics=&search=&page={page_number}&namespace=characters&venus=true&nsfw=true&nsfw_only=false&nsfl=true&chub=true'
     headers = {
@@ -26,9 +25,6 @@ def fetch_character_list(page_number):
 
 def construct_character_url(character_path):
     return f"https://www.chub.ai/characters/{character_path}"
-
-
-### script2 integration below: 
 
 def fetch_character_data(url):
     headers = {
@@ -85,59 +81,52 @@ def fetch_character_data(url):
             json_output = json.dumps(prompt, indent=2)
 
             return {
-                'name' : name,
-                'pfp' : pfp,
+                'name': name,
+                'pfp': pfp,
                 'author': author_clean,
                 'description': description,
                 'json_output': json_output
             }
 
-
         except json.JSONDecodeError:
-            print("Failed to decode JSON response.")
+            logging.error("Failed to decode JSON response.")
+            return None
     else:
-        print(f"Failed to retrieve the data. Status code: {response.status_code}")
-
+        logging.error("Failed to retrieve the data. Status code: %d", response.status_code)
+        return None
 
 def construct_api_url(base_url):
     parsed_url = urllib.parse.urlparse(base_url)
-
     path = parsed_url.path
     api_base_url = f"https://api.chub.ai/api{path}"
-
     nocache_value = random.random()
     api_url = f"{api_base_url}?full=true&nocache={nocache_value}"
     return api_url
-
-
 
 def main():
     user_input = input("Enter the trending page link (e.g., https://www.chub.ai/?segment=trending&page=1): ")
     match = re.search(r"page=(\d+)", user_input)
     if match:
-        page_number = match.group(1)
-        characters_data = fetch_character_list(page_number)
-        if characters_data and 'data' in characters_data and 'nodes' in characters_data['data']:
-            character_urls = [construct_character_url(character['fullPath']) for character in characters_data['data']['nodes']]
-            if character_urls:
-                for x in character_urls:
-                    char = construct_api_url(x)
-                    data = fetch_character_data(char)
-                    if data:
-                        formatted_response = f"Name: {data['name']}\n\nPfp URL: {data['pfp']}\n\nAuthor: {data['author']}\n\nDescription: {data['description']}\n\nJSON:\n{data['json_output']}"
-                        print(formatted_response)
-                    else:
-                        print("Failed to fetch character data for URL:", x)
+        start_page_number = int(match.group(1))
+        for page_number in range(start_page_number, 69):
+            characters_data = fetch_character_list(page_number)
+            if characters_data and 'data' in characters_data and 'nodes' in characters_data['data']:
+                character_urls = [construct_character_url(character['fullPath']) for character in characters_data['data']['nodes']]
+                if character_urls:
+                    for character_url in character_urls:
+                        api_url = construct_api_url(character_url)
+                        data = fetch_character_data(api_url)
+                        if data:
+                            formatted_response = f"Name: {data['name']}\n\nPfp URL: {data['pfp']}\n\nAuthor: {data['author']}\n\nDescription: {data['description']}\n\nJSON:\n{data['json_output']}"
+                            print(formatted_response)
+                        else:
+                            logging.error("Failed to fetch character data for URL: %s", character_url)
+                else:
+                    logging.error("No character URLs found on page %d.", page_number)
             else:
-                print("No character URLs found.")
-        else:
-            logging.error("No valid character data found.")
+                logging.error("No valid character data found on page %d.", page_number)
     else:
         logging.error("No page number found in the URL.")
-
-if __name__ == "__main__":
-    main()
-
 
 if __name__ == "__main__":
     main()
